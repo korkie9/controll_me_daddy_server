@@ -1,6 +1,8 @@
 package main
 
 import (
+	"controll-me-daddy/models"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -38,6 +40,34 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("Error reading message:", err)
 			break
 		}
+
+		// Try to parse as CoordinateMessage first
+		var coordMsg models.CoordinateMessage
+		if err := json.Unmarshal(message, &coordMsg); err == nil {
+			if coordMsg.Side == "left" {
+				joystick.LeftStickMove(float32(coordMsg.X), float32(coordMsg.Y))
+			} else {
+				joystick.RightStickMove(float32(coordMsg.X), float32(coordMsg.Y))
+			}
+			fmt.Printf("Received coordinates: X=%.2f, Y=%.2f, Side=%.2f\n", coordMsg.X, coordMsg.Y, coordMsg.Side)
+			continue
+		}
+
+		// If not CoordinateMessage, try ButtonMessage
+		var btnMsg models.ButtonMessage
+		if err := json.Unmarshal(message, &btnMsg); err == nil {
+			fmt.Printf("Received button: Number=%d, On=%v\n", btnMsg.Key, btnMsg.Value)
+			// Process button press/release
+			if btnMsg.Value == 1 {
+				joystick.ButtonDown(btnMsg.Key)
+			} else if btnMsg.Value == -1 {
+				joystick.ButtonDown(btnMsg.Key)
+			} else {
+				joystick.ButtonUp(btnMsg.Key)
+			}
+			continue
+		}
+
 		fmt.Printf("Received: %s\\n", message)
 		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
 			fmt.Println("Error writing message:", err)
