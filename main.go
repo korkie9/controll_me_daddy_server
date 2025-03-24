@@ -44,14 +44,20 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		// Try to parse as CoordinateMessage first
 		var coordMsg models.CoordinateMessage
 		if err := json.Unmarshal(message, &coordMsg); err == nil {
-			if coordMsg.Side == "left" {
-				joystick.LeftStickMove(float32(coordMsg.X), float32(coordMsg.Y))
-			} else {
-				joystick.RightStickMove(float32(coordMsg.X), float32(coordMsg.Y))
+			// This block only executes if unmarshaling was successful
+			if coordMsg.Side != "" {
+				if coordMsg.Side == "left" {
+					joystick.LeftStickMove(float32(coordMsg.X), float32(coordMsg.Y))
+				} else {
+					joystick.RightStickMove(float32(coordMsg.X), float32(coordMsg.Y))
+				}
+				fmt.Printf("Received coordinates: X=%.2f, Y=%.2f, Side=%s\n", coordMsg.X, coordMsg.Y, coordMsg.Side)
+				continue
 			}
-			fmt.Printf("Received coordinates: X=%.2f, Y=%.2f, Side=%.2f\n", coordMsg.X, coordMsg.Y, coordMsg.Side)
-			continue
 		}
+
+		// If we get here, the message wasn't a CoordinateMessage
+		// The loop will automatically continue to the next iteration
 
 		// If not CoordinateMessage, try ButtonMessage
 		var btnMsg models.ButtonMessage
