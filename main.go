@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -20,15 +19,42 @@ var upgrader = websocket.Upgrader{
 }
 
 func sendButtonEvent(joystick uinput.Gamepad, key int, state int) error {
-	if state == 1 || state == -1 { // Press
-		if err := joystick.ButtonDown(key); err != nil {
-			return err
-		}
-		time.Sleep(10 * time.Millisecond) // Minimum hold time
-		return joystick.ButtonUp(key)     // Immediate release
-	} else { // Release
+	if state == 1 || state == -1 {
+		return joystick.ButtonDown(key)
+	} else {
 		return joystick.ButtonUp(key)
 	}
+}
+
+func sendHatEvent(joystick uinput.Gamepad, key int, state int) error {
+	if key == 16 {
+		if state == 1 {
+			fmt.Printf("Logging left presss")
+			return joystick.HatPress(uinput.ButtonDpadLeft)
+
+		}
+		if state == -1 {
+			fmt.Printf("Logging right presss")
+			return joystick.HatPress(uinput.ButtonDpadRight)
+		}
+		if state == 0 {
+			joystick.HatRelease(uinput.ButtonDpadLeft)
+			return joystick.HatRelease(uinput.ButtonDpadLeft)
+		}
+	}
+	if key == 17 {
+		if state == 1 {
+			return joystick.HatPress(uinput.ButtonDpadUp)
+		}
+		if state == -1 {
+			return joystick.HatPress(uinput.ButtonDpadDown)
+		}
+		if state == 0 {
+			joystick.HatRelease(uinput.ButtonDpadUp)
+			return joystick.HatRelease(uinput.ButtonDpadDown)
+		}
+	}
+	return joystick.HatRelease(uinput.HatUp)
 }
 
 func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) {
@@ -47,10 +73,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) 
 			break
 		}
 
-		// Try to parse as CoordinateMessage first
 		var coordMsg models.CoordinateMessage
 		if err := json.Unmarshal(message, &coordMsg); err == nil {
-			// This block only executes if unmarshaling was successful
 			if coordMsg.Side != "" {
 				if coordMsg.Side == "left" {
 					joystick.LeftStickMove(float32(coordMsg.X), float32(coordMsg.Y))
@@ -62,15 +86,14 @@ func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) 
 			}
 		}
 
-		// If we get here, the message wasn't a CoordinateMessage
-		// The loop will automatically continue to the next iteration
-
-		// If not CoordinateMessage, try ButtonMessage
 		var btnMsg models.ButtonMessage
 		if err := json.Unmarshal(message, &btnMsg); err == nil {
 			fmt.Printf("Received button: Number=%d, On=%v\n", btnMsg.Key, btnMsg.Value)
-			// Process button press/release
-			if btnMsg.Value == 1 || btnMsg.Value == -1 {
+			if btnMsg.Key == 16 || btnMsg.Key == 17 {
+				sendHatEvent(joystick, btnMsg.Key, btnMsg.Value)
+				continue
+			}
+			if btnMsg.Value == 1 {
 				joystick.ButtonDown(btnMsg.Key)
 			} else {
 				joystick.ButtonUp(btnMsg.Key)
