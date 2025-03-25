@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -18,14 +19,19 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
-	joystick, err := uinput.CreateGamepad("/dev/uinput", []byte("Virtual Joystick"), 0x1234, 0x5678)
-	if err != nil {
-		log.Fatalf("Failed to create virtual joystick: %v", err)
+func sendButtonEvent(joystick uinput.Gamepad, key int, state int) error {
+	if state == 1 || state == -1 { // Press
+		if err := joystick.ButtonDown(key); err != nil {
+			return err
+		}
+		time.Sleep(10 * time.Millisecond) // Minimum hold time
+		return joystick.ButtonUp(key)     // Immediate release
+	} else { // Release
+		return joystick.ButtonUp(key)
 	}
-	defer joystick.Close()
+}
 
-	joystick.ButtonDown(304) // Max right
+func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -64,9 +70,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(message, &btnMsg); err == nil {
 			fmt.Printf("Received button: Number=%d, On=%v\n", btnMsg.Key, btnMsg.Value)
 			// Process button press/release
-			if btnMsg.Value == 1 {
-				joystick.ButtonDown(btnMsg.Key)
-			} else if btnMsg.Value == -1 {
+			if btnMsg.Value == 1 || btnMsg.Value == -1 {
 				joystick.ButtonDown(btnMsg.Key)
 			} else {
 				joystick.ButtonUp(btnMsg.Key)
@@ -83,10 +87,17 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/ws", wsHandler)
-	fmt.Println("WebSocket server started on :8080")
-	err := http.ListenAndServe(":8080", nil)
+
+	joystick, err := uinput.CreateGamepad("/dev/uinput", []byte("Virtual Joystick"), 0x1234, 0x5678)
 	if err != nil {
-		fmt.Println("Error starting server:", err)
+		log.Fatalf("Failed to create virtual joystick: %v", err)
+	}
+	defer joystick.Close()
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		wsHandler(w, r, joystick) // Pass as interface value
+	})
+	fmt.Println("WebSocket server started on :8080")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatal("Error starting server:", err)
 	}
 }
