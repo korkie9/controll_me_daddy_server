@@ -4,12 +4,10 @@ import (
 	"controll-me-daddy/models"
 	"encoding/json"
 	"fmt"
+	"github.com/bendahl/uinput"
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
-
-	"github.com/gorilla/websocket"
-
-	"github.com/bendahl/uinput"
 )
 
 var upgrader = websocket.Upgrader{
@@ -18,47 +16,35 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func sendButtonEvent(joystick uinput.Gamepad, key int, state int) error {
-	if state == 1 || state == -1 {
-		return joystick.ButtonDown(key)
-	} else {
-		return joystick.ButtonUp(key)
-	}
-}
-
 func sendHatEvent(joystick uinput.Gamepad, key int, state int) error {
 	if key == 16 {
-		if state == 1 {
-			fmt.Printf("Logging left presss")
-			return joystick.HatPress(uinput.ButtonDpadLeft)
-
-		}
 		if state == -1 {
-			fmt.Printf("Logging right presss")
-			return joystick.HatPress(uinput.ButtonDpadRight)
+			return joystick.HatPress(uinput.HatLeft)
+		}
+		if state == 1 {
+			return joystick.HatPress(uinput.HatRight)
 		}
 		if state == 0 {
-			joystick.HatRelease(uinput.ButtonDpadLeft)
-			return joystick.HatRelease(uinput.ButtonDpadLeft)
+			joystick.HatRelease(uinput.HatRight)
+			return joystick.HatRelease(uinput.HatLeft)
 		}
 	}
 	if key == 17 {
 		if state == 1 {
-			return joystick.HatPress(uinput.ButtonDpadUp)
+			return joystick.HatPress(uinput.HatUp)
 		}
 		if state == -1 {
-			return joystick.HatPress(uinput.ButtonDpadDown)
+			return joystick.HatPress(uinput.HatDown)
 		}
 		if state == 0 {
-			joystick.HatRelease(uinput.ButtonDpadUp)
-			return joystick.HatRelease(uinput.ButtonDpadDown)
+			joystick.HatRelease(uinput.HatUp)
+			return joystick.HatRelease(uinput.HatDown)
 		}
 	}
-	return joystick.HatRelease(uinput.HatUp)
+	return nil
 }
 
 func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) {
-
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		fmt.Println("Error upgrading:", err)
@@ -89,10 +75,18 @@ func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) 
 		var btnMsg models.ButtonMessage
 		if err := json.Unmarshal(message, &btnMsg); err == nil {
 			fmt.Printf("Received button: Number=%d, On=%v\n", btnMsg.Key, btnMsg.Value)
+
+			// Detailed logging for D-pad events
 			if btnMsg.Key == 16 || btnMsg.Key == 17 {
-				sendHatEvent(joystick, btnMsg.Key, btnMsg.Value)
+				fmt.Printf("D-Pad Event: Key=%d, Value=%d\n", btnMsg.Key, btnMsg.Value)
+				err := sendHatEvent(joystick, btnMsg.Key, btnMsg.Value)
+				if err != nil {
+					fmt.Printf("Error in D-Pad event: %v\n", err)
+				}
 				continue
 			}
+
+			// Regular button handling
 			if btnMsg.Value == 1 {
 				joystick.ButtonDown(btnMsg.Key)
 			} else {
@@ -101,24 +95,21 @@ func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) 
 			continue
 		}
 
-		fmt.Printf("Received: %s\\n", message)
-		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
-			fmt.Println("Error writing message:", err)
-			break
-		}
+		fmt.Printf("Received: %s\n", message)
 	}
 }
 
 func main() {
-
-	joystick, err := uinput.CreateGamepad("/dev/uinput", []byte("Virtual Joystick"), 0x1234, 0x5678)
+	joystick, err := uinput.CreateGamepad("/dev/uinput", []byte("Detailed Virtual Joystick"), 0x045E, 0x028E)
 	if err != nil {
 		log.Fatalf("Failed to create virtual joystick: %v", err)
 	}
 	defer joystick.Close()
+
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		wsHandler(w, r, joystick) // Pass as interface value
+		wsHandler(w, r, joystick)
 	})
+
 	fmt.Println("WebSocket server started on :8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal("Error starting server:", err)
