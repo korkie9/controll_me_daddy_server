@@ -18,10 +18,10 @@ var upgrader = websocket.Upgrader{
 
 func sendHatEvent(joystick uinput.Gamepad, key int, state int) error {
 	if key == 16 {
-		if state == -1 {
+		if state == 1 {
 			return joystick.HatPress(uinput.HatLeft)
 		}
-		if state == 1 {
+		if state == -1 {
 			return joystick.HatPress(uinput.HatRight)
 		}
 		if state == 0 {
@@ -30,10 +30,10 @@ func sendHatEvent(joystick uinput.Gamepad, key int, state int) error {
 		}
 	}
 	if key == 17 {
-		if state == 1 {
+		if state == -1 {
 			return joystick.HatPress(uinput.HatUp)
 		}
-		if state == -1 {
+		if state == 1 {
 			return joystick.HatPress(uinput.HatDown)
 		}
 		if state == 0 {
@@ -74,11 +74,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) 
 
 		var btnMsg models.ButtonMessage
 		if err := json.Unmarshal(message, &btnMsg); err == nil {
-			fmt.Printf("Received button: Number=%d, On=%v\n", btnMsg.Key, btnMsg.Value)
 
-			// Detailed logging for D-pad events
 			if btnMsg.Key == 16 || btnMsg.Key == 17 {
-				fmt.Printf("D-Pad Event: Key=%d, Value=%d\n", btnMsg.Key, btnMsg.Value)
 				err := sendHatEvent(joystick, btnMsg.Key, btnMsg.Value)
 				if err != nil {
 					fmt.Printf("Error in D-Pad event: %v\n", err)
