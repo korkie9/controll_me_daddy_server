@@ -38,7 +38,27 @@ func sendHatEvent(joystick uinput.Gamepad, key int, state int) error {
 		}
 		if state == 0 {
 			joystick.HatRelease(uinput.HatUp)
-			return joystick.HatRelease(uinput.HatDown)
+			return joystick.HatPress(uinput.HatDown)
+		}
+	}
+	return nil
+}
+
+func sendMenu(joystick uinput.Gamepad, key int, state int) error {
+	if key == 315 {
+		if state == 1 {
+			return joystick.HatPress(uinput.ButtonStart)
+		}
+		if state == 0 {
+			return joystick.HatRelease(uinput.ButtonStart)
+		}
+	}
+	if key == 314 {
+		if state == 1 {
+			return joystick.HatPress(uinput.ButtonSelect)
+		}
+		if state == 0 {
+			return joystick.HatRelease(uinput.ButtonSelect)
 		}
 	}
 	return nil
@@ -82,6 +102,13 @@ func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) 
 				}
 				continue
 			}
+			if btnMsg.Key == 314 || btnMsg.Key == 315 {
+				err := sendMenu(joystick, btnMsg.Key, btnMsg.Value)
+				if err != nil {
+					fmt.Printf("Error in Menu event: %v\n", err)
+				}
+				continue
+			}
 
 			// Regular button handling
 			if btnMsg.Value == 1 {
@@ -97,7 +124,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) 
 }
 
 func main() {
-	joystick, err := uinput.CreateGamepad("/dev/uinput", []byte("Detailed Virtual Joystick"), 0x045E, 0x028E)
+	joystick, err := uinput.CreateGamepad("/dev/uinput", []byte("Socket Joystick"), 0x045E, 0x028E)
 	if err != nil {
 		log.Fatalf("Failed to create virtual joystick: %v", err)
 	}
