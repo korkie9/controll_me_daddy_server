@@ -2,6 +2,7 @@ package main
 
 import (
 	"controll-me-daddy/models"
+	"controll-me-daddy/util"
 	"encoding/json"
 	"fmt"
 	"github.com/bendahl/uinput"
@@ -45,20 +46,25 @@ func sendHatEvent(joystick uinput.Gamepad, key int, state int) error {
 }
 
 func sendMenu(joystick uinput.Gamepad, key int, state int) error {
+	fmt.Printf("received menu input: X=%s, Y=%s", key, state)
 	if key == 315 {
 		if state == 1 {
-			return joystick.HatPress(uinput.ButtonStart)
+			fmt.Printf("Pressign pause here 1")
+			return joystick.ButtonDown(uinput.ButtonStart)
+
 		}
 		if state == 0 {
-			return joystick.HatRelease(uinput.ButtonStart)
+
+			fmt.Printf("Releasing pause here 1")
+			return joystick.ButtonUp(uinput.ButtonStart)
 		}
 	}
 	if key == 314 {
 		if state == 1 {
-			return joystick.HatPress(uinput.ButtonSelect)
+			return joystick.ButtonUp(uinput.ButtonSelect)
 		}
 		if state == 0 {
-			return joystick.HatRelease(uinput.ButtonSelect)
+			return joystick.ButtonUp(uinput.ButtonSelect)
 		}
 	}
 	return nil
@@ -112,8 +118,10 @@ func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) 
 
 			// Regular button handling
 			if btnMsg.Value == 1 {
+				fmt.Printf("Logging button press event event: %v\n", btnMsg.Value)
 				joystick.ButtonDown(btnMsg.Key)
 			} else {
+				fmt.Printf("Logging button release event event: %v\n", btnMsg.Value)
 				joystick.ButtonUp(btnMsg.Key)
 			}
 			continue
@@ -124,6 +132,12 @@ func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) 
 }
 
 func main() {
+	ip, err := util.GetLocalIP()
+
+	if err != nil {
+		log.Fatalln("No IP", err)
+	}
+	fmt.Println(ip)
 	joystick, err := uinput.CreateGamepad("/dev/uinput", []byte("Socket Joystick"), 0x045E, 0x028E)
 	if err != nil {
 		log.Fatalf("Failed to create virtual joystick: %v", err)
@@ -135,7 +149,7 @@ func main() {
 	})
 
 	fmt.Println("WebSocket server started on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe("0.0.0.0:8080", nil); err != nil {
 		log.Fatal("Error starting server:", err)
 	}
 }
