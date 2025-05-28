@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"github.com/bendahl/uinput"
 	"github.com/gorilla/websocket"
+	"github.com/mdp/qrterminal/v3"
 	"log"
 	"net/http"
+	"os"
 )
 
 var upgrader = websocket.Upgrader{
@@ -133,11 +135,18 @@ func wsHandler(w http.ResponseWriter, r *http.Request, joystick uinput.Gamepad) 
 
 func main() {
 	ip, err := util.GetLocalIP()
-
 	if err != nil {
 		log.Fatalln("No IP", err)
 	}
-	fmt.Println(ip)
+	websocketUrl := "ws://" + ip + ":8080/ws"
+
+	config := qrterminal.Config{
+		HalfBlocks: true,
+		Level:      qrterminal.M,
+		Writer:     os.Stdout,
+	}
+	qrterminal.GenerateWithConfig(websocketUrl, config)
+
 	joystick, err := uinput.CreateGamepad("/dev/uinput", []byte("Socket Joystick"), 0x045E, 0x028E)
 	if err != nil {
 		log.Fatalf("Failed to create virtual joystick: %v", err)
@@ -148,7 +157,8 @@ func main() {
 		wsHandler(w, r, joystick)
 	})
 
-	fmt.Println("WebSocket server started on :8080")
+	fmt.Println(websocketUrl)
+	fmt.Println("WebSocket server started on :8080. Scan QR from Control Me Daddy Mobile app to connect")
 	if err := http.ListenAndServe("0.0.0.0:8080", nil); err != nil {
 		log.Fatal("Error starting server:", err)
 	}
